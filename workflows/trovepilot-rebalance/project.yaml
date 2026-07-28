@@ -1,0 +1,7 @@
+staging-settings:
+  cre-cli:
+    don-family: "zone-a"
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: "${CRE_ETHEREUM_RPC_URL}"
+

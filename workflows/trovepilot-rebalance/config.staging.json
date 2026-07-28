@@ -1,0 +1,13 @@
+{
+  "schedule": "0 */5 * * * *",
+  "chainSelectorName": "ethereum-testnet-sepolia",
+  "poolAddress": "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951",
+  "receiverAddress": "0x0000000000000000000000000000000000000000",
+  "variableDebtUsdcAddress": "0x36B5dE936eF1710E1d22EabE5231b28581a92ECc",
+  "oracleEventAddress": "0x17Dac87b07EAC97De4E182Fc51C925ebB7E723e2",
+  "oracleEventSignature": "AnswerUpdated(int256,uint256,uint256)",
+  "borrowers": [],
+  "reportTtlSeconds": 300,
+  "writeGasLimit": "600000",
+  "dryRun": true
+}
