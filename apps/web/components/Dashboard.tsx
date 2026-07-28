@@ -1,20 +1,100 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { createPublicClient, createWalletClient, custom, formatUnits, http, parseUnits, type Address } from 'viem'
 import { validateThresholds } from '@/lib/thresholds'
+import { addresses, sepolia } from '@/lib/config'
+import { erc20Abi, poolAbi, receiverAbi } from '@/lib/contracts'
 
 const events = [
   { time: 'Every 5 min', title: 'CRE heartbeat', detail: 'Rechecks price, interest accrual, and borrower activity.' },
   { time: 'Event', title: 'WBTC oracle update', detail: 'Runs the same Health Factor evaluation immediately.' },
   { time: 'Onchain', title: 'Receiver verification', detail: 'Recalculates live state before any USDC repayment.' },
 ]
+const publicClient = createPublicClient({ chain: sepolia, transport: http() })
 
 export function Dashboard() {
   const [lower, setLower] = useState('1.58')
   const [target, setTarget] = useState('1.60')
   const [upper, setUpper] = useState('1.62')
   const [enabled, setEnabled] = useState(true)
+  const [account, setAccount] = useState<Address>()
+  const [healthFactor, setHealthFactor] = useState('—')
+  const [collateral, setCollateral] = useState('—')
+  const [debt, setDebt] = useState('—')
+  const [reserve, setReserve] = useState('—')
+  const [amount, setAmount] = useState('')
+  const [pending, setPending] = useState(false)
+  const [message, setMessage] = useState('')
   const error = validateThresholds(lower, target, upper)
+  const receiver = addresses.receiver
+  const refresh = useCallback(async (borrower: Address) => {
+    if (!receiver) return
+    const [position, userRules, userReserve] = await Promise.all([
+      publicClient.readContract({ address: addresses.pool, abi: poolAbi, functionName: 'getUserAccountData', args: [borrower] }),
+      publicClient.readContract({ address: receiver, abi: receiverAbi, functionName: 'rules', args: [borrower] }),
+      publicClient.readContract({ address: receiver, abi: receiverAbi, functionName: 'reserves', args: [borrower] }),
+    ])
+    setCollateral(formatUnits(position[0], 8))
+    setDebt(formatUnits(position[1], 8))
+    setHealthFactor(position[5] === (2n ** 256n - 1n) ? '∞' : Number(formatUnits(position[5], 18)).toFixed(3))
+    setReserve(Number(formatUnits(userReserve, 6)).toFixed(2))
+    if (userRules[0] > 0n) {
+      setLower(formatUnits(userRules[0], 18)); setTarget(formatUnits(userRules[1], 18))
+      setUpper(formatUnits(userRules[2], 18)); setEnabled(userRules[3])
+    }
+  }, [receiver])
+
+  useEffect(() => {
+    if (!account) return
+    void refresh(account)
+    const timer = setInterval(() => void refresh(account), 30_000)
+    return () => clearInterval(timer)
+  }, [account, refresh])
+
+  async function wallet() {
+    if (!window.ethereum) throw new Error('Install an EIP-1193 wallet such as MetaMask')
+    const client = createWalletClient({ chain: sepolia, transport: custom(window.ethereum) })
+    const [selected] = await client.requestAddresses()
+    setAccount(selected); return { client, selected }
+  }
+
+  async function transact(run: (client: ReturnType<typeof createWalletClient>, selected: Address) => Promise<`0x${string}`>) {
+    if (!receiver) return setMessage('Set NEXT_PUBLIC_RECEIVER_ADDRESS after deployment')
+    setPending(true); setMessage('')
+    try {
+      const { client, selected } = await wallet()
+      const hash = await run(client, selected)
+      await publicClient.waitForTransactionReceipt({ hash })
+      setMessage(`Confirmed ${hash.slice(0, 10)}…`)
+      await refresh(selected)
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause))
+    } finally { setPending(false) }
+  }
+
+  const saveRules = () => transact((client, selected) => client.writeContract({
+    account: selected, chain: sepolia, address: receiver!, abi: receiverAbi, functionName: 'setRules',
+    args: [parseUnits(lower, 18), parseUnits(target, 18), parseUnits(upper, 18), enabled],
+  }))
+  const deposit = async () => {
+    if (!receiver || !amount) return setMessage('Enter a USDC amount and configure the receiver')
+    setPending(true); setMessage('')
+    try {
+      const { client, selected } = await wallet()
+      const value = parseUnits(amount, 6)
+      const approval = await client.writeContract({ account: selected, chain: sepolia, address: addresses.usdc, abi: erc20Abi, functionName: 'approve', args: [receiver, value] })
+      await publicClient.waitForTransactionReceipt({ hash: approval })
+      const hash = await client.writeContract({ account: selected, chain: sepolia, address: receiver, abi: receiverAbi, functionName: 'depositReserve', args: [value] })
+      await publicClient.waitForTransactionReceipt({ hash }); setMessage(`Deposit confirmed ${hash.slice(0, 10)}…`)
+      await refresh(selected)
+    } catch (cause) { setMessage(cause instanceof Error ? cause.message : String(cause)) }
+    finally { setPending(false) }
+  }
+  const withdraw = () => transact((client, selected) => client.writeContract({
+    account: selected, chain: sepolia, address: receiver!, abi: receiverAbi,
+    functionName: 'withdrawReserve', args: [parseUnits(amount, 6)],
+  }))
 
   return (
     <div className="shell">
@@ -32,7 +112,9 @@ export function Dashboard() {
       <main>
         <header>
           <div><p className="eyebrow">AAVE V3 POSITION</p><h1>Collateral safety cockpit</h1></div>
-          <button className="secondary">Connect wallet</button>
+          <button className="secondary" onClick={() => wallet().then(({ selected }) => refresh(selected)).catch((e) => setMessage(String(e)))}>
+            {account ? `${account.slice(0, 6)}…${account.slice(-4)}` : 'Connect wallet'}
+          </button>
         </header>
 
         <section id="dashboard" className="hero">
@@ -42,10 +124,10 @@ export function Dashboard() {
         </section>
 
         <section className="metrics">
-          <article><label>Health Factor</label><strong>—</strong><small>Connect a borrower wallet</small></article>
-          <article><label>WBTC collateral</label><strong>—</strong><small>Aave V3 Sepolia</small></article>
-          <article><label>USDC variable debt</label><strong>—</strong><small>Repay-only automation</small></article>
-          <article><label>Automation reserve</label><strong>—</strong><small>User-funded USDC</small></article>
+          <article><label>Health Factor</label><strong>{healthFactor}</strong><small>Live Aave account data</small></article>
+          <article><label>Collateral base</label><strong>{collateral}</strong><small>Aave oracle USD base</small></article>
+          <article><label>Debt base</label><strong>{debt}</strong><small>Repay-only automation</small></article>
+          <article><label>Automation reserve</label><strong>{reserve}</strong><small>User-funded USDC</small></article>
         </section>
 
         <div className="columns">
@@ -59,14 +141,16 @@ export function Dashboard() {
               <label>Upper<input value={upper} onChange={(e) => setUpper(e.target.value)} /></label>
             </div>
             {error && <p className="error">{error}</p>}
-            <button disabled={Boolean(error)} className="primary">Save rules with wallet</button>
+            <button disabled={Boolean(error) || pending} className="primary" onClick={saveRules}>Save rules with wallet</button>
           </section>
 
           <section id="reserve" className="panel">
             <p className="eyebrow">REPAYMENT CAPACITY</p><h3>USDC automation reserve</h3>
-            <div className="reserveAmount">0.00 <span>USDC</span></div>
+            <div className="reserveAmount">{reserve} <span>USDC</span></div>
             <p className="muted">Funds can only repay your Aave variable USDC debt or return to your wallet.</p>
-            <div className="buttonRow"><button className="primary">Deposit</button><button className="secondary">Withdraw</button></div>
+            <input className="amountInput" inputMode="decimal" placeholder="Amount in USDC" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <div className="buttonRow"><button disabled={pending} className="primary" onClick={deposit}>Deposit</button><button disabled={pending || !amount} className="secondary" onClick={withdraw}>Withdraw</button></div>
+            {message && <p className="txMessage">{message}</p>}
           </section>
         </div>
 
@@ -83,4 +167,3 @@ export function Dashboard() {
     </div>
   )
 }
-

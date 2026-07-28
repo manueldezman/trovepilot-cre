@@ -116,12 +116,11 @@ duplicate evaluation, expiry, disabled rules, safe/upper Health Factor, no reser
   end-to-end testnet demonstration, not a production mainnet deployment.
 - Reverted EVM transactions cannot retain rejection events. Unauthorized and malformed calls therefore
   revert; authenticated, well-formed skips emit durable reason events.
-- The frontend currently presents the adapted UX and validation. Wallet transaction wiring must point at a
-  deployed receiver before live buttons are enabled.
+- Frontend reads and user-signed writes require `NEXT_PUBLIC_RECEIVER_ADDRESS`; without it the dashboard
+  remains safely read-only and explains that deployment configuration is missing.
 
 ## What was reused
 
 The original dark-crimson TrovePilot visual language, three-threshold safety band, target-restoration
 repayment intent, and reserve model were retained. Mezo ICR contracts, MUSD mint/repay calls, BTC simulation
 routes, VPS listener, five-second block polling, and server-side signer were removed from the production path.
-
