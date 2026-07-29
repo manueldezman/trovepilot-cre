@@ -11,6 +11,7 @@ const navItems = [
   { href: '/reserve', label: 'USDC reserve' },
   { href: '/activity', label: 'CRE activity' },
   { href: '/simulation', label: 'Simulation' },
+  { href: '/designs', label: 'UI concepts' },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -24,6 +25,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 function ShellFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { account, connect } = useTrovePilot()
+
+  if (pathname.startsWith('/designs')) return <>{children}</>
 
   return (
     <div className="shell">
