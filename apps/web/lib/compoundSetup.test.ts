@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { calculateBorrowCapacity, hasPositiveAmount, isBorrowAmountAllowed } from './compoundSetup'
+import {
+  calculateBorrowCapacity, formatAllowance, hasPositiveAmount, isBorrowAmountAllowed,
+} from './compoundSetup'
 
 describe('hasPositiveAmount', () => {
   it('accepts positive decimal values', () => {
@@ -81,5 +83,16 @@ describe('isBorrowAmountAllowed', () => {
   it('rejects missing and zero amounts', () => {
     expect(isBorrowAmountAllowed(null, 337_500_000n)).toBe(false)
     expect(isBorrowAmountAllowed(0n, 337_500_000n)).toBe(false)
+  })
+})
+
+describe('formatAllowance', () => {
+  it('shows maximum approvals as Unlimited', () => {
+    expect(formatAllowance(2n ** 256n - 1n, 6)).toBe('Unlimited')
+  })
+
+  it('rounds finite allowances without trailing zeroes', () => {
+    expect(formatAllowance(123_456_789n, 8)).toBe('1.234568')
+    expect(formatAllowance(18_000_000n, 6)).toBe('18')
   })
 })

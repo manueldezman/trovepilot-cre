@@ -6,6 +6,7 @@ import { compoundSepolia, sepolia } from '@/lib/config'
 import { cometAbi, compoundFaucetAbi, erc20Abi } from '@/lib/contracts'
 import {
   calculateBorrowCapacity,
+  formatAllowance,
   hasPositiveAmount,
   isBorrowAmountAllowed,
   positionAmountDefaults,
@@ -98,8 +99,8 @@ export function CompoundSetupPanel() {
       walletUsdc: formatUnits(walletUsdc, 6),
       suppliedWbtc: formatUnits(suppliedWbtc, 8),
       borrowedUsdc: formatUnits(borrowedUsdc, 6),
-      wbtcAllowance: formatUnits(wbtcAllowance, 8),
-      usdcAllowance: formatUnits(usdcAllowance, 6),
+      wbtcAllowance: formatAllowance(wbtcAllowance, 8),
+      usdcAllowance: formatAllowance(usdcAllowance, 6),
       totalUsdcSupply: formatUnits(totalUsdcSupply, 6),
       totalUsdcBorrow: formatUnits(totalUsdcBorrow, 6),
       wbtcSupplyCap: formatUnits(wbtcInfo.supplyCap, 8),

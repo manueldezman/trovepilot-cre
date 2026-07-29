@@ -63,7 +63,21 @@ export function isBorrowAmountAllowed(amount: bigint | null, maximumAdditionalBo
   return amount !== null && amount > 0n && amount <= maximumAdditionalBorrow
 }
 
+export function formatAllowance(value: bigint, decimals: number, maximumFractionDigits = 6) {
+  if (value >= (2n ** 256n - 1n) / 2n) return 'Unlimited'
+
+  const digitsToRemove = Math.max(decimals - maximumFractionDigits, 0)
+  const roundingScale = 10n ** BigInt(digitsToRemove)
+  const rounded = digitsToRemove === 0
+    ? value
+    : (value + roundingScale / 2n) / roundingScale * roundingScale
+  const [whole, fraction = ''] = formatUnits(rounded, decimals).split('.')
+  const trimmedFraction = fraction.replace(/0+$/, '')
+  return trimmedFraction ? `${whole}.${trimmedFraction}` : whole
+}
+
 export function hasPositiveAmount(value: string) {
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed > 0
 }
+import { formatUnits } from 'viem'
