@@ -37,15 +37,17 @@ export function ActivityPanel() {
   }, [account, receiver])
 
   return (
-    <section className="panel activity">
+    <section className="signalTerminal">
       <div className="panelHead">
-        <div><p className="eyebrow">LIVE MONITORING</p><h3>CRE and receiver activity</h3></div>
+        <div><p className="eyebrow">SIGNAL TERMINAL</p><h3>cre://trovepilot/compound-monitor --follow</h3></div>
         <button className="secondary" onClick={account ? () => window.location.reload() : connect}>Refresh</button>
       </div>
-      <div className="event"><time>Every 5 min</time><i /><div><b>CRE heartbeat</b><p>Rechecks price, accrued interest, and borrower activity.</p></div></div>
-      <div className="event"><time>Oracle event</time><i /><div><b>WBTC price update</b><p>Runs the same finalized-state evaluation immediately.</p></div></div>
-      <div className="event"><time>Latest</time><i /><div><b>Evaluation ID</b><p className="mono">{lastEvaluation}</p></div></div>
-      <p className="muted">{status}</p>
+      <div className="terminalRows">
+        <p><time>TRIGGER</time><b>HEARTBEAT</b><span>schedule=*/5_minutes</span><em>LISTENING</em></p>
+        <p><time>TRIGGER</time><b>ORACLE_EVENT</b><span>feed=WBTC_USD · confidence=FINALIZED</span><em>LISTENING</em></p>
+        <p><time>LATEST</time><b>EVALUATION_ID</b><span>{lastEvaluation}</span><em>ONCHAIN</em></p>
+        <p><time>$</time><span>{status}</span><i /></p>
+      </div>
       {receiver && (
         <a href={`${sepolia.blockExplorers.default.url}/address/${receiver}#events`} target="_blank" rel="noreferrer">
           View accepted, skipped, and repayment events on Etherscan

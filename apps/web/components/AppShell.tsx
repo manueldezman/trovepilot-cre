@@ -5,13 +5,12 @@ import { usePathname } from 'next/navigation'
 import { TrovePilotProvider, useTrovePilot } from '@/components/TrovePilotProvider'
 
 const navItems = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/compound-setup', label: 'Compound setup' },
-  { href: '/rules', label: 'Automation rules' },
-  { href: '/reserve', label: 'USDC reserve' },
-  { href: '/activity', label: 'CRE activity' },
+  { href: '/', label: 'Field' },
+  { href: '/compound-setup', label: 'Position' },
+  { href: '/rules', label: 'Policy' },
+  { href: '/reserve', label: 'Reserve' },
+  { href: '/activity', label: 'Signals' },
   { href: '/simulation', label: 'Simulation' },
-  { href: '/designs', label: 'UI concepts' },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -28,26 +27,25 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
 
   if (pathname.startsWith('/designs')) return <>{children}</>
 
+  const current = navItems.find((item) => item.href === pathname)?.label ?? 'Collateral field'
+
   return (
-    <div className="shell">
-      <aside>
-        <div className="brand"><span className="brandMark">T</span><div>TrovePilot<small>CRE / Sepolia</small></div></div>
-        <nav>
+    <div className="atlasApp">
+      <header className="atlasHeader">
+        <Link className="atlasBrand" href="/"><b>TP</b><span>TROVEPILOT<small>COLLATERAL FIELD / CRE</small></span></Link>
+        <nav className="atlasNav">
           {navItems.map((item) => (
             <Link className={pathname === item.href ? 'active' : ''} href={item.href} key={item.href}>
               {item.label}
             </Link>
           ))}
         </nav>
-        <div className="network"><i /> Ethereum Sepolia</div>
-      </aside>
-      <main>
-        <header>
-          <div><p className="eyebrow">AAVE V3 POSITION</p><h1>Collateral safety cockpit</h1></div>
-          <button className="secondary" onClick={connect}>
-            {account ? `${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect wallet'}
-          </button>
-        </header>
+        <button className="atlasConnect" onClick={connect}>
+          {account ? `${account.slice(0, 6)}…${account.slice(-4)}` : 'CONNECT ↗'}
+        </button>
+      </header>
+      <div className="atlasContext"><span>COMPOUND III · ETHEREUM SEPOLIA</span><b>{current.toUpperCase()}</b><span><i /> CRE MONITOR</span></div>
+      <main className="atlasMain">
         {children}
       </main>
     </div>
