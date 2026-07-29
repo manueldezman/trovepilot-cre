@@ -2,8 +2,8 @@ import Link from 'next/link'
 import styles from './page.module.css'
 
 const concepts = [
-  { href: '/designs/orbit', number: '01', name: 'Orbit Control', detail: 'Dark operational cockpit with calm neon status cues.' },
-  { href: '/designs/ledger', number: '02', name: 'Ledger Editorial', detail: 'Bright, spacious financial interface with strong hierarchy.' },
+  { href: '/designs/atlas', number: '01', name: 'Atlas Field', detail: 'A spatial risk map built around one continuous threshold landscape.' },
+  { href: '/designs/index', number: '02', name: 'Index Sheet', detail: 'An editorial market sheet using type, rules, tables, and an event tape.' },
   { href: '/designs/signal', number: '03', name: 'Signal Terminal', detail: 'High-contrast technical console for active monitoring.' },
 ]
 

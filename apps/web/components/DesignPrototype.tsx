@@ -4,21 +4,13 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import styles from './DesignPrototype.module.css'
 
-type Variant = 'orbit' | 'ledger' | 'signal'
-
-const copy = {
-  orbit: { name: 'Orbit Control', mark: 'TP', tagline: 'Autonomous collateral command' },
-  ledger: { name: 'TrovePilot', mark: 'T', tagline: 'Your position, kept in balance.' },
-  signal: { name: 'TROVEPILOT//CRE', mark: 'T//', tagline: 'COLLATERAL_RISK_TERMINAL' },
-}
-
-export function DesignPrototype({ variant }: { variant: Variant }) {
+export function DesignPrototype({ variant = 'signal' }: { variant?: 'signal' }) {
   const [section, setSection] = useState('Overview')
   const [connected, setConnected] = useState(false)
   const [enabled, setEnabled] = useState(true)
   const [borrow, setBorrow] = useState(18)
   const projectedRatio = useMemo(() => (45.13 / Math.max(borrow, 0.01)).toFixed(2), [borrow])
-  const concept = copy[variant]
+  const concept = { name: 'TROVEPILOT//CRE', mark: 'T//', tagline: 'COLLATERAL_RISK_TERMINAL' }
 
   return (
     <div className={`${styles.prototype} ${styles[variant]}`}>
