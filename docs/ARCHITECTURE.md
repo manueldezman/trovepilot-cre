@@ -1,55 +1,39 @@
 # Architecture
 
 ```text
-Chainlink BTC/USD aggregator ── AnswerUpdated ──┐
-                                                ├─ CRE workflow
-CRE scheduler ───────────── every 5 minutes ────┘      │
-                                                       ├─ reads Aave Pool + debt token
-                                                       ├─ reads receiver rules + reserve
-                                                       └─ signed report (only below lower HF)
-                                                                  │
-                                                    Keystone Forwarder
-                                                                  │
-User wallet ─ rules / USDC reserve ── TrovePilotReceiver ◄────────┘
-                                              │
-                                              ├─ verifies CRE identity and replay/expiry
-                                              ├─ rereads live Aave state
-                                              └─ Aave Pool.repay(USDC, variable, borrower)
+Chainlink WBTC/USD aggregator ─ AnswerUpdated ─┐
+                                               ├─ CRE workflow
+CRE scheduler ──────── every 5 minutes ────────┘      │
+                                                      ├─ reads Compound Comet position/prices
+                                                      ├─ reads receiver rules/reserve
+                                                      └─ signed report below lower ratio
+                                                                 │
+                                                   Keystone Forwarder
+                                                                 │
+User wallet ─ rules / USDC reserve ─ TrovePilotReceiver ◄────────┘
+                                             │
+                                             ├─ verifies identity/replay/expiry
+                                             ├─ rereads live Compound state
+                                             └─ Comet.supplyTo(borrower, USDC)
 ```
 
-## Responsibility boundaries
+The pure policy owns Compound ratio calculation and classification. Both the oracle-event trigger and the
+five-minute heartbeat call the same evaluation function. The receiver is authoritative for repayment size
+and uses live WBTC and USDC prices, the live borrow collateral factor, current debt, and deposited reserve.
 
-- `src/policy.ts` owns the pure Health Factor classification and has no CRE or RPC dependency.
-- `workflow.ts` owns trigger orchestration, finalized-state reads, structured logs, and report delivery.
-- `TrovePilotReceiver.sol` owns authorization, live financial verification, reserve accounting, and execution.
-- The web application owns presentation and user-initiated, wallet-signed configuration/reserve actions only.
+The monitored ratio is:
 
-Both the event trigger and heartbeat call `evaluate`. The event improves reaction time; the heartbeat is the
-authoritative fallback for interest accrual, user actions, Aave configuration changes, missed events, and the
-fact that the Sepolia Aave WBTC source is a static test adapter.
+`borrow-adjusted WBTC value / USDC debt value`
 
-## Original-to-CRE mapping
+Below `1.58`, USDC is repaid toward `1.60`; at or above `1.58`, no repayment occurs. The `1.62` upper band
+remains an explicit no-action classification.
 
-| TrovePilot / Mezo | TrovePilot CRE / Aave V3 |
-| --- | --- |
-| Trove ICR | Aave Health Factor |
-| MUSD debt | USDC variable debt |
-| BTC-down repayment | `Pool.repay` using deposited USDC |
-| BTC-up minting | Deliberate no-action; debt is never increased |
-| VPS block/oracle polling | CRE event plus five-minute heartbeat |
-| VPS automation private key | CRE report and constrained receiver |
+## Verified Sepolia dependencies
 
-## Oracle verification
+- Compound cUSDCv3: `0xAec1F48e02Cfb822Be958B68C7957156EB3F0b6e`
+- WBTC: `0xa035b9e130F2B1AedC733eEFb1C67Ba4c503491F`
+- USDC: `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
+- WBTC/USD proxy: `0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43`
+- Event-emitting aggregator: `0x17Dac87b07EAC97De4E182Fc51C925ebB7E723e2`
 
-Verified against Sepolia on 2026-07-28:
-
-- `AaveOracle.getSourceOfAsset(WBTC)` resolves to
-  `0x784B90bA1E9a8cf3C9939c2e072F058B024C4b8a`.
-- That source exposes `latestAnswer()` and returns a fixed Sepolia test price, but does not expose the
-  Chainlink aggregator proxy interface.
-- Chainlink BTC/USD proxy `0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43` resolves to event-emitting
-  aggregator `0x17Dac87b07EAC97De4E182Fc51C925ebB7E723e2`.
-
-The BTC/USD event is therefore a wake-up signal only. Every evaluation and every receiver execution uses
-Aave's own live account data; the Chainlink feed value is never substituted into Aave's Health Factor.
-
+The event wakes the workflow; every evaluation and receiver execution rereads Comet’s configured prices.

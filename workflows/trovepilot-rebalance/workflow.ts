@@ -8,25 +8,43 @@ import {
   parseAbiParameters, toBytes, zeroAddress, type Address, type Hex,
 } from 'viem'
 import { z } from 'zod'
-import { erc20Abi, poolAbi, receiverAbi } from './src/abi'
-import { Action, decide } from './src/policy'
+import { cometAbi, receiverAbi } from './src/abi'
+import { Action, calculateCompoundPosition, calculateSuggestedRepay, decide } from './src/policy'
 
 export const configSchema = z.object({
   schedule: z.string(),
   chainSelectorName: z.string(),
-  poolAddress: z.string(),
+  cometAddress: z.string(),
+  collateralAssetAddress: z.string(),
   receiverAddress: z.string(),
-  variableDebtUsdcAddress: z.string(),
   oracleEventAddress: z.string(),
   oracleEventSignature: z.string(),
   borrowers: z.array(z.string()),
   reportTtlSeconds: z.number().positive(),
   writeGasLimit: z.string(),
   dryRun: z.boolean().default(false),
+  simulationRules: z.object({
+    lowerRatio: z.string(),
+    targetRatio: z.string(),
+    upperRatio: z.string(),
+    enabled: z.boolean(),
+    reserveBalance: z.string(),
+  }).optional(),
 })
 type Config = z.infer<typeof configSchema>
 
-function read<T extends readonly unknown[] | bigint>(
+type AssetInfo = {
+  offset: number
+  asset: Address
+  priceFeed: Address
+  scale: bigint
+  borrowCollateralFactor: bigint
+  liquidateCollateralFactor: bigint
+  liquidationFactor: bigint
+  supplyCap: bigint
+}
+
+function read<T>(
   runtime: Runtime<Config>, client: EVMClient, address: Address,
   abi: readonly unknown[], functionName: string, args: readonly unknown[],
 ): T {
@@ -53,33 +71,66 @@ function evaluate(runtime: Runtime<Config>, trigger: 'HEARTBEAT' | 'ORACLE_EVENT
   for (const rawBorrower of config.borrowers) {
     const borrower = rawBorrower as Address
     try {
-      const account = read<readonly [bigint, bigint, bigint, bigint, bigint, bigint]>(
-        runtime, client, config.poolAddress as Address, poolAbi, 'getUserAccountData', [borrower],
+      const comet = config.cometAddress as Address
+      const collateralAsset = config.collateralAssetAddress as Address
+      const asset = read<AssetInfo>(
+        runtime, client, comet, cometAbi, 'getAssetInfoByAddress', [collateralAsset],
       )
-      const userRules = read<readonly [bigint, bigint, bigint, boolean]>(
-        runtime, client, config.receiverAddress as Address, receiverAbi, 'rules', [borrower],
-      )
-      const reserve = read<bigint>(
-        runtime, client, config.receiverAddress as Address, receiverAbi, 'reserves', [borrower],
+      const collateralBalance = read<bigint>(
+        runtime, client, comet, cometAbi, 'collateralBalanceOf', [borrower, collateralAsset],
       )
       const debt = read<bigint>(
-        runtime, client, config.variableDebtUsdcAddress as Address, erc20Abi, 'balanceOf', [borrower],
+        runtime, client, comet, cometAbi, 'borrowBalanceOf', [borrower],
       )
-      const [suggestedRepay] = read<readonly [bigint, bigint]>(
-        runtime, client, config.receiverAddress as Address, receiverAbi, 'previewRepay', [borrower],
+      const basePriceFeed = read<Address>(
+        runtime, client, comet, cometAbi, 'baseTokenPriceFeed', [],
+      )
+      const baseScale = read<bigint>(runtime, client, comet, cometAbi, 'baseScale', [])
+      const collateralPrice = read<bigint>(
+        runtime, client, comet, cometAbi, 'getPrice', [asset.priceFeed],
+      )
+      const basePrice = read<bigint>(runtime, client, comet, cometAbi, 'getPrice', [basePriceFeed])
+      const position = calculateCompoundPosition({
+        collateralBalance,
+        collateralScale: asset.scale,
+        collateralPrice,
+        borrowCollateralFactor: asset.borrowCollateralFactor,
+        debtBalance: debt,
+        baseScale,
+        basePrice,
+      })
+      const userRules = config.dryRun && config.simulationRules
+        ? [
+            BigInt(config.simulationRules.lowerRatio),
+            BigInt(config.simulationRules.targetRatio),
+            BigInt(config.simulationRules.upperRatio),
+            config.simulationRules.enabled,
+          ] as const
+        : read<readonly [bigint, bigint, bigint, boolean]>(
+            runtime, client, config.receiverAddress as Address, receiverAbi, 'rules', [borrower],
+          )
+      const reserve = config.dryRun && config.simulationRules
+        ? BigInt(config.simulationRules.reserveBalance)
+        : read<bigint>(
+            runtime, client, config.receiverAddress as Address, receiverAbi, 'reserves', [borrower],
+          )
+      const suggestedRepay = calculateSuggestedRepay(
+        position, debt, reserve, baseScale, basePrice, userRules[1],
       )
       const decision = decide({
-        healthFactor: account[5], lowerHF: userRules[0], upperHF: userRules[2],
+        ratio: position.ratio, lowerRatio: userRules[0], upperRatio: userRules[2],
         debtBalance: debt, reserveBalance: reserve, enabled: userRules[3],
       })
       const evaluationId = keccak256(encodeAbiParameters(
         parseAbiParameters('address,uint256,uint256,string'),
-        [borrower, sourceBlock, account[5], trigger],
+        [borrower, sourceBlock, position.ratio, trigger],
       ))
       runtime.log(JSON.stringify({
-        event: 'position_evaluated', borrower, healthFactor: account[5].toString(),
-        collateralBase: account[0].toString(), debtBase: account[1].toString(),
-        reserve: reserve.toString(), action: decision.reason, evaluationId,
+        event: 'position_evaluated', borrower, ratio: position.ratio.toString(),
+        collateralBalance: collateralBalance.toString(), debtBalance: debt.toString(),
+        collateralPrice: collateralPrice.toString(), basePrice: basePrice.toString(),
+        reserve: reserve.toString(), suggestedRepay: suggestedRepay.toString(),
+        action: decision.reason, evaluationId,
       }))
 
       if (decision.action !== Action.REPAY || config.dryRun) {
@@ -88,9 +139,9 @@ function evaluate(runtime: Runtime<Config>, trigger: 'HEARTBEAT' | 'ORACLE_EVENT
       }
       const report = encodeAbiParameters(
         parseAbiParameters(
-          'address borrower,uint8 action,uint256 observedHealthFactor,uint256 sourceBlock,uint256 validUntil,bytes32 evaluationId,uint256 suggestedRepayAmount',
+          'address borrower,uint8 action,uint256 observedRatio,uint256 sourceBlock,uint256 validUntil,bytes32 evaluationId,uint256 suggestedRepayAmount',
         ),
-        [borrower, Action.REPAY, account[5], sourceBlock, BigInt(sourceTime + config.reportTtlSeconds), evaluationId, suggestedRepay],
+        [borrower, Action.REPAY, position.ratio, sourceBlock, BigInt(sourceTime + config.reportTtlSeconds), evaluationId, suggestedRepay],
       )
       const signed = runtime.report(prepareReportRequest(report)).result()
       const result = client.writeReport(runtime, {

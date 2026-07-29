@@ -3,8 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPublicClient, createWalletClient, custom, formatUnits, http, parseUnits, type Address } from 'viem'
 import { validateThresholds } from '@/lib/thresholds'
-import { addresses, sepolia } from '@/lib/config'
-import { erc20Abi, poolAbi, receiverAbi } from '@/lib/contracts'
+import { addresses, compoundSepolia, sepolia } from '@/lib/config'
+import { cometAbi, erc20Abi, receiverAbi } from '@/lib/contracts'
+import { calculateBorrowCapacity } from '@/lib/compoundSetup'
 
 const publicClient = createPublicClient({ chain: sepolia, transport: http() })
 
@@ -14,7 +15,7 @@ type TrovePilotContextValue = {
   target: string
   upper: string
   enabled: boolean
-  healthFactor: string
+  ratio: string
   collateral: string
   debt: string
   reserve: string
@@ -43,7 +44,7 @@ export function TrovePilotProvider({ children }: { children: ReactNode }) {
   const [upper, setUpper] = useState('1.62')
   const [enabled, setEnabled] = useState(true)
   const [account, setAccount] = useState<Address>()
-  const [healthFactor, setHealthFactor] = useState('-')
+  const [ratio, setRatio] = useState('-')
   const [collateral, setCollateral] = useState('-')
   const [debt, setDebt] = useState('-')
   const [reserve, setReserve] = useState('-')
@@ -53,22 +54,58 @@ export function TrovePilotProvider({ children }: { children: ReactNode }) {
   const receiver = addresses.receiver
   const thresholdError = validateThresholds(lower, target, upper)
 
+  const assertCompoundReceiver = useCallback(async () => {
+    if (!receiver) throw new Error('Deploy and configure the Compound receiver')
+    const receiverComet = await publicClient.readContract({ address: receiver, abi: receiverAbi, functionName: 'comet' })
+    if (receiverComet.toLowerCase() !== compoundSepolia.comet.toLowerCase()) {
+      throw new Error('Configured receiver is not the Compound receiver')
+    }
+  }, [receiver])
+
   const refresh = useCallback(async (borrower: Address) => {
-    if (!receiver) return
-    const [position, userRules, userReserve] = await Promise.all([
-      publicClient.readContract({ address: addresses.pool, abi: poolAbi, functionName: 'getUserAccountData', args: [borrower] }),
-      publicClient.readContract({ address: receiver, abi: receiverAbi, functionName: 'rules', args: [borrower] }),
-      publicClient.readContract({ address: receiver, abi: receiverAbi, functionName: 'reserves', args: [borrower] }),
+    const [collateralBalance, debtBalance, asset, basePriceFeed, baseScale] = await Promise.all([
+      publicClient.readContract({ address: compoundSepolia.comet, abi: cometAbi, functionName: 'collateralBalanceOf', args: [borrower, compoundSepolia.wbtc] }),
+      publicClient.readContract({ address: compoundSepolia.comet, abi: cometAbi, functionName: 'borrowBalanceOf', args: [borrower] }),
+      publicClient.readContract({ address: compoundSepolia.comet, abi: cometAbi, functionName: 'getAssetInfoByAddress', args: [compoundSepolia.wbtc] }),
+      publicClient.readContract({ address: compoundSepolia.comet, abi: cometAbi, functionName: 'baseTokenPriceFeed' }),
+      publicClient.readContract({ address: compoundSepolia.comet, abi: cometAbi, functionName: 'baseScale' }),
     ])
-    setCollateral(formatUnits(position[0], 8))
-    setDebt(formatUnits(position[1], 8))
-    setHealthFactor(position[5] === (2n ** 256n - 1n) ? '∞' : Number(formatUnits(position[5], 18)).toFixed(3))
-    setReserve(Number(formatUnits(userReserve, 6)).toFixed(2))
-    if (userRules[0] > 0n) {
-      setLower(formatUnits(userRules[0], 18))
-      setTarget(formatUnits(userRules[1], 18))
-      setUpper(formatUnits(userRules[2], 18))
-      setEnabled(userRules[3])
+    const [collateralPrice, basePrice] = await Promise.all([
+      publicClient.readContract({ address: compoundSepolia.comet, abi: cometAbi, functionName: 'getPrice', args: [asset.priceFeed] }),
+      publicClient.readContract({ address: compoundSepolia.comet, abi: cometAbi, functionName: 'getPrice', args: [basePriceFeed] }),
+    ])
+    const position = calculateBorrowCapacity({
+      collateralAmount: collateralBalance,
+      collateralScale: asset.scale,
+      collateralPrice,
+      borrowCollateralFactor: asset.borrowCollateralFactor,
+      basePrice,
+      baseScale,
+      currentDebt: debtBalance,
+      targetRatio: parseUnits('1', 18),
+    })
+    setCollateral(formatUnits(collateralBalance, 8))
+    setDebt(formatUnits(debtBalance, 6))
+    setRatio(position.currentRatio === null ? '∞' : Number(formatUnits(position.currentRatio, 18)).toFixed(3))
+
+    if (receiver) {
+      try {
+        const receiverComet = await publicClient.readContract({ address: receiver, abi: receiverAbi, functionName: 'comet' })
+        if (receiverComet.toLowerCase() !== compoundSepolia.comet.toLowerCase()) return
+        const [userRules, userReserve] = await Promise.all([
+          publicClient.readContract({ address: receiver, abi: receiverAbi, functionName: 'rules', args: [borrower] }),
+          publicClient.readContract({ address: receiver, abi: receiverAbi, functionName: 'reserves', args: [borrower] }),
+        ])
+        setReserve(Number(formatUnits(userReserve, 6)).toFixed(2))
+        if (userRules[0] > 0n) {
+          setLower(formatUnits(userRules[0], 18))
+          setTarget(formatUnits(userRules[1], 18))
+          setUpper(formatUnits(userRules[2], 18))
+          setEnabled(userRules[3])
+        }
+      } catch {
+        setReserve('Deploy Compound receiver')
+      }
     }
   }, [receiver])
 
@@ -108,6 +145,7 @@ export function TrovePilotProvider({ children }: { children: ReactNode }) {
     setPending(true)
     setMessage('')
     try {
+      await assertCompoundReceiver()
       const { client, selected } = await wallet()
       const hash = await run(client, selected)
       await publicClient.waitForTransactionReceipt({ hash })
@@ -118,7 +156,7 @@ export function TrovePilotProvider({ children }: { children: ReactNode }) {
     } finally {
       setPending(false)
     }
-  }, [receiver, refresh, wallet])
+  }, [assertCompoundReceiver, receiver, refresh, wallet])
 
   const saveRules = useCallback(() => transact((client, selected) => client.writeContract({
     account: selected,
@@ -137,6 +175,7 @@ export function TrovePilotProvider({ children }: { children: ReactNode }) {
     setPending(true)
     setMessage('')
     try {
+      await assertCompoundReceiver()
       const { client, selected } = await wallet()
       const value = parseUnits(amount, 6)
       const approval = await client.writeContract({
@@ -164,7 +203,7 @@ export function TrovePilotProvider({ children }: { children: ReactNode }) {
     } finally {
       setPending(false)
     }
-  }, [amount, receiver, refresh, wallet])
+  }, [amount, assertCompoundReceiver, receiver, refresh, wallet])
 
   const withdraw = useCallback(() => transact((client, selected) => client.writeContract({
     account: selected,
@@ -181,7 +220,7 @@ export function TrovePilotProvider({ children }: { children: ReactNode }) {
     target,
     upper,
     enabled,
-    healthFactor,
+    ratio,
     collateral,
     debt,
     reserve,
@@ -200,7 +239,7 @@ export function TrovePilotProvider({ children }: { children: ReactNode }) {
     saveRules,
     deposit,
     withdraw,
-  }), [account, amount, collateral, connect, debt, deposit, enabled, healthFactor, lower, message, pending, receiver, refreshConnected, reserve, saveRules, target, thresholdError, upper, withdraw])
+  }), [account, amount, collateral, connect, debt, deposit, enabled, lower, message, pending, ratio, receiver, refreshConnected, reserve, saveRules, target, thresholdError, upper, withdraw])
 
   return <TrovePilotContext.Provider value={value}>{children}</TrovePilotContext.Provider>
 }

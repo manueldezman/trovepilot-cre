@@ -8,22 +8,24 @@ interface IERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
 }
 
-interface IAavePool {
-    function getUserAccountData(address user) external view returns (
-        uint256 totalCollateralBase,
-        uint256 totalDebtBase,
-        uint256 availableBorrowsBase,
-        uint256 currentLiquidationThreshold,
-        uint256 ltv,
-        uint256 healthFactor
-    );
+interface IComet {
+    struct AssetInfo {
+        uint8 offset;
+        address asset;
+        address priceFeed;
+        uint64 scale;
+        uint64 borrowCollateralFactor;
+        uint64 liquidateCollateralFactor;
+        uint64 liquidationFactor;
+        uint128 supplyCap;
+    }
 
-    function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf)
-        external returns (uint256);
+    function baseToken() external view returns (address);
+    function baseTokenPriceFeed() external view returns (address);
+    function baseScale() external view returns (uint256);
+    function getPrice(address priceFeed) external view returns (uint256);
+    function getAssetInfoByAddress(address asset) external view returns (AssetInfo memory);
+    function collateralBalanceOf(address account, address asset) external view returns (uint128);
+    function borrowBalanceOf(address account) external view returns (uint256);
+    function supplyTo(address dst, address asset, uint256 amount) external;
 }
-
-interface IAaveOracle {
-    function getAssetPrice(address asset) external view returns (uint256);
-    function BASE_CURRENCY_UNIT() external view returns (uint256);
-}
-

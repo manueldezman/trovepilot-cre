@@ -20,7 +20,7 @@ export function RulesPanel() {
   return (
     <section className="panel">
       <div className="panelHead">
-        <div><p className="eyebrow">POLICY</p><h3>Health Factor band</h3></div>
+        <div><p className="eyebrow">POLICY</p><h3>Compound safety-ratio band</h3></div>
         <button className={`toggle ${enabled ? 'on' : ''}`} onClick={() => setEnabled(!enabled)} aria-label="Toggle automation"><span /></button>
       </div>
       <p className="muted">Below the lower band, repay USDC toward target. Above the upper band, take no action.</p>

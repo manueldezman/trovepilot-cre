@@ -1,9 +1,8 @@
 # TrovePilot CRE
 
-TrovePilot CRE is a repay-only Aave V3 Sepolia safety monitor. A Chainlink CRE workflow evaluates a
-borrower's Health Factor when BTC/USD updates and every five minutes. Below the configured lower band it
-sends a report to an onchain receiver, which independently recalculates and caps a USDC variable-debt
-repayment.
+TrovePilot CRE is a repay-only Compound III Sepolia safety monitor. A Chainlink CRE workflow evaluates a
+borrower's WBTC/USDC safety ratio when BTC/USD updates and every five minutes. Below the configured lower
+band it sends a report to an onchain receiver, which independently recalculates and caps a USDC repayment.
 
 There is no recurring automation wallet, VPS listener, browser private key, or custom transaction signer.
 
@@ -17,7 +16,7 @@ See [the architecture and original-system mapping](docs/ARCHITECTURE.md). The de
 
 Below lower, the receiver repays enough USDC to move toward target, capped by the current debt, deposited
 reserve, and CRE suggestion. Within range and above upper it takes no action. TrovePilot never borrows more
-USDC just to lower a healthy position's Health Factor.
+USDC just to lower a healthy position's ratio.
 
 ## Repository
 
@@ -46,11 +45,11 @@ key in any `NEXT_PUBLIC_*` variable.
 ## Testnet position and reserve
 
 1. Fund the user wallet with Sepolia ETH.
-2. Obtain supported test WBTC and USDC from the Aave Sepolia faucet.
-3. Supply WBTC and borrow variable-rate USDC through Aave V3 Sepolia.
+2. Use `/compound-setup` to request WBTC and USDC from the Compound Sepolia faucet.
+3. Supply WBTC and borrow USDC through the Compound cUSDCv3 market.
 4. Deploy the receiver and configure the borrower rules.
 5. Approve the receiver for USDC, then call `depositReserve`.
-6. Keep Health Factor safely above `1.0`; test low-Health-Factor behavior first with mocks/simulation.
+6. Keep the safety ratio above `1.0`; test low-ratio behavior first with mocks/simulation.
 
 Only the borrower can configure their rules, deposit reserve, or withdraw their accounted reserve.
 
@@ -95,7 +94,7 @@ After confirmation:
 CRE logs are structured JSON events:
 
 - `check_started`: trigger, finalized block, and time.
-- `position_evaluated`: Health Factor, collateral, debt, reserve, decision, and evaluation ID.
+- `position_evaluated`: ratio, live prices, collateral, debt, reserve, decision, and evaluation ID.
 - `repayment_report_submitted`: transaction hash.
 - `evaluation_error`: borrower-scoped failure.
 
@@ -104,13 +103,17 @@ decoder failures are isolated per borrower and logged; a subsequent heartbeat re
 If event delivery is missed, the five-minute heartbeat provides bounded fallback.
 
 For a report that reaches the receiver but does not repay, inspect `InstructionSkipped`. Common reasons are
-duplicate evaluation, expiry, disabled rules, safe/upper Health Factor, no reserve, or no debt.
+duplicate evaluation, expiry, disabled rules, safe/upper ratio, no reserve, or no debt.
+
+After deployment, use the `/activity` page for the latest processed evaluation ID and a direct receiver
+event link. CRE structured logs show every heartbeat/event decision and report transaction hash; Etherscan
+receiver events independently show accepted reports, skip reasons, and completed repayments.
 
 ## Security limitations
 
-- The receiver treats CRE reports as instructions and rereads all critical Aave state.
+- The receiver treats CRE reports as instructions and rereads all critical Compound state.
 - Evaluation IDs provide onchain event/heartbeat deduplication. Expiry bounds delayed execution.
-- USDC can only repay the same borrower's variable debt or be withdrawn by that borrower.
+- USDC can only repay the same borrower's Compound base debt or be withdrawn by that borrower.
 - Sepolia uses a mock Keystone Forwarder. It does **not** provide production-equivalent report
   authentication, and metadata can be spoofed through test infrastructure. This repository is an
   end-to-end testnet demonstration, not a production mainnet deployment.

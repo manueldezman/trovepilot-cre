@@ -1,34 +1,34 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IERC20, IAavePool, IAaveOracle} from "./interfaces.sol";
+import {IERC20, IComet} from "./interfaces.sol";
 
-/// @notice CRE-controlled Aave V3 repayment reserve. Borrowers keep ownership of their Aave position.
+/// @notice CRE-controlled Compound III repayment reserve. Borrowers retain ownership of their positions.
 contract TrovePilotReceiver {
     enum Action { NO_ACTION, REPAY }
     enum SkipReason { NONE, DUPLICATE, EXPIRED, STALE_BLOCK, DISABLED, SAFE_RANGE, UPPER_BAND, NO_RESERVE, NO_DEBT }
 
     struct Rules {
-        uint128 lowerHF;
-        uint128 targetHF;
-        uint128 upperHF;
+        uint128 lowerRatio;
+        uint128 targetRatio;
+        uint128 upperRatio;
         bool enabled;
     }
 
     struct Instruction {
         address borrower;
         Action action;
-        uint256 observedHealthFactor;
+        uint256 observedRatio;
         uint256 sourceBlock;
         uint256 validUntil;
         bytes32 evaluationId;
         uint256 suggestedRepayAmount;
     }
 
-    IAavePool public immutable pool;
-    IAaveOracle public immutable oracle;
+    uint256 private constant FACTOR_SCALE = 1e18;
+    IComet public immutable comet;
     IERC20 public immutable usdc;
-    IERC20 public immutable variableDebtUSDC;
+    address public immutable collateralAsset;
     address public owner;
     address public forwarder;
     address public expectedWorkflowOwner;
@@ -49,13 +49,13 @@ contract TrovePilotReceiver {
     error TransferFailed();
     error ReentrantCall();
 
-    event RulesUpdated(address indexed borrower, uint256 lowerHF, uint256 targetHF, uint256 upperHF, bool enabled);
+    event RulesUpdated(address indexed borrower, uint256 lowerRatio, uint256 targetRatio, uint256 upperRatio, bool enabled);
     event ReserveDeposited(address indexed borrower, uint256 amount);
     event ReserveWithdrawn(address indexed borrower, uint256 amount);
     event WorkflowAuthorizationUpdated(address indexed forwarder, address indexed workflowOwner, bytes32 workflowId);
-    event InstructionAccepted(bytes32 indexed evaluationId, address indexed borrower, Action action, uint256 observedHF);
-    event InstructionSkipped(bytes32 indexed evaluationId, address indexed borrower, SkipReason reason, uint256 liveHF);
-    event RepaymentExecuted(bytes32 indexed evaluationId, address indexed borrower, uint256 amount, uint256 liveHF);
+    event InstructionAccepted(bytes32 indexed evaluationId, address indexed borrower, Action action, uint256 observedRatio);
+    event InstructionSkipped(bytes32 indexed evaluationId, address indexed borrower, SkipReason reason, uint256 liveRatio);
+    event RepaymentExecuted(bytes32 indexed evaluationId, address indexed borrower, uint256 amount, uint256 liveRatio);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert Unauthorized();
@@ -70,31 +70,31 @@ contract TrovePilotReceiver {
     }
 
     constructor(
-        address pool_,
-        address oracle_,
+        address comet_,
+        address collateralAsset_,
         address usdc_,
-        address variableDebtUSDC_,
         address forwarder_,
         address workflowOwner_,
         bytes32 workflowId_
     ) {
         if (
-            pool_ == address(0) || oracle_ == address(0) || usdc_ == address(0)
-                || variableDebtUSDC_ == address(0) || forwarder_ == address(0)
+            comet_ == address(0) || collateralAsset_ == address(0) || usdc_ == address(0)
+                || forwarder_ == address(0)
         ) revert InvalidAddress();
-        pool = IAavePool(pool_);
-        oracle = IAaveOracle(oracle_);
+        comet = IComet(comet_);
+        collateralAsset = collateralAsset_;
         usdc = IERC20(usdc_);
-        variableDebtUSDC = IERC20(variableDebtUSDC_);
+        if (IComet(comet_).baseToken() != usdc_) revert InvalidAddress();
+        if (IComet(comet_).getAssetInfoByAddress(collateralAsset_).asset != collateralAsset_) revert InvalidAddress();
         owner = msg.sender;
         _setWorkflowAuthorization(forwarder_, workflowOwner_, workflowId_);
-        if (!IERC20(usdc_).approve(pool_, type(uint256).max)) revert TransferFailed();
+        if (!IERC20(usdc_).approve(comet_, type(uint256).max)) revert TransferFailed();
     }
 
-    function setRules(uint128 lowerHF, uint128 targetHF, uint128 upperHF, bool enabled) external {
-        if (lowerHF <= 1e18 || lowerHF > targetHF || targetHF > upperHF) revert InvalidRules();
-        rules[msg.sender] = Rules(lowerHF, targetHF, upperHF, enabled);
-        emit RulesUpdated(msg.sender, lowerHF, targetHF, upperHF, enabled);
+    function setRules(uint128 lowerRatio, uint128 targetRatio, uint128 upperRatio, bool enabled) external {
+        if (lowerRatio <= FACTOR_SCALE || lowerRatio > targetRatio || targetRatio > upperRatio) revert InvalidRules();
+        rules[msg.sender] = Rules(lowerRatio, targetRatio, upperRatio, enabled);
+        emit RulesUpdated(msg.sender, lowerRatio, targetRatio, upperRatio, enabled);
     }
 
     function depositReserve(uint256 amount) external nonReentrant {
@@ -138,24 +138,33 @@ contract TrovePilotReceiver {
         _process(instruction);
     }
 
-    function previewRepay(address borrower) public view returns (uint256 amount, uint256 healthFactor) {
+    function currentRatio(address borrower)
+        public view returns (uint256 ratio, uint256 adjustedCollateralValue, uint256 debtValue)
+    {
+        IComet.AssetInfo memory asset = comet.getAssetInfoByAddress(collateralAsset);
+        uint256 collateral = comet.collateralBalanceOf(borrower, collateralAsset);
+        uint256 debt = comet.borrowBalanceOf(borrower);
+        uint256 collateralPrice = comet.getPrice(asset.priceFeed);
+        uint256 basePrice = comet.getPrice(comet.baseTokenPriceFeed());
+
+        adjustedCollateralValue =
+            collateral * collateralPrice / asset.scale * asset.borrowCollateralFactor / FACTOR_SCALE;
+        debtValue = debt * basePrice / comet.baseScale();
+        ratio = debtValue == 0 ? type(uint256).max : adjustedCollateralValue * FACTOR_SCALE / debtValue;
+    }
+
+    function previewRepay(address borrower) public view returns (uint256 amount, uint256 ratio) {
         Rules memory userRules = rules[borrower];
-        (uint256 collateralBase, uint256 debtBase,,, , uint256 hf) = pool.getUserAccountData(borrower);
-        healthFactor = hf;
-        if (!userRules.enabled || hf >= userRules.lowerHF || debtBase == 0) return (0, hf);
+        uint256 adjustedCollateralValue;
+        (ratio, adjustedCollateralValue,) = currentRatio(borrower);
+        uint256 debt = comet.borrowBalanceOf(borrower);
+        if (!userRules.enabled || ratio >= userRules.lowerRatio || debt == 0) return (0, ratio);
 
-        (, , , uint256 liquidationThreshold,,) = pool.getUserAccountData(borrower);
-        uint256 adjustedCollateralBase = collateralBase * liquidationThreshold / 10_000;
-        uint256 targetDebtBase = adjustedCollateralBase * 1e18 / userRules.targetHF;
-        if (debtBase <= targetDebtBase) return (0, hf);
-
-        uint256 debtToRepayBase = debtBase - targetDebtBase;
-        uint256 price = oracle.getAssetPrice(address(usdc));
-        if (price == 0 || oracle.BASE_CURRENCY_UNIT() == 0) return (0, hf);
-        // Aave account-data values and asset prices share the oracle's base-currency decimals.
-        amount = _ceilDiv(debtToRepayBase * 1e6, price);
-        uint256 debtBalance = variableDebtUSDC.balanceOf(borrower);
-        if (amount > debtBalance) amount = debtBalance;
+        uint256 basePrice = comet.getPrice(comet.baseTokenPriceFeed());
+        uint256 targetDebt =
+            adjustedCollateralValue * comet.baseScale() * FACTOR_SCALE / basePrice / userRules.targetRatio;
+        if (debt <= targetDebt) return (0, ratio);
+        amount = debt - targetDebt;
         if (amount > reserves[borrower]) amount = reserves[borrower];
     }
 
@@ -168,34 +177,37 @@ contract TrovePilotReceiver {
         lastEvaluationId[instruction.borrower] = instruction.evaluationId;
 
         Rules memory userRules = rules[instruction.borrower];
-        (, uint256 debtBase,,, , uint256 liveHF) = pool.getUserAccountData(instruction.borrower);
-        emit InstructionAccepted(instruction.evaluationId, instruction.borrower, instruction.action, instruction.observedHealthFactor);
+        (uint256 liveRatio,,) = currentRatio(instruction.borrower);
+        uint256 debt = comet.borrowBalanceOf(instruction.borrower);
+        emit InstructionAccepted(instruction.evaluationId, instruction.borrower, instruction.action, instruction.observedRatio);
 
-        if (instruction.validUntil < block.timestamp) return _skip(instruction, SkipReason.EXPIRED, liveHF);
+        if (instruction.validUntil < block.timestamp) return _skip(instruction, SkipReason.EXPIRED, liveRatio);
         if (
             instruction.sourceBlock == 0 || instruction.sourceBlock > block.number
                 || block.number - instruction.sourceBlock > MAX_REPORT_BLOCK_AGE
-        ) return _skip(instruction, SkipReason.STALE_BLOCK, liveHF);
-        if (!userRules.enabled) return _skip(instruction, SkipReason.DISABLED, liveHF);
-        if (liveHF >= userRules.upperHF) return _skip(instruction, SkipReason.UPPER_BAND, liveHF);
-        if (liveHF >= userRules.lowerHF || instruction.action != Action.REPAY) {
-            return _skip(instruction, SkipReason.SAFE_RANGE, liveHF);
+        ) return _skip(instruction, SkipReason.STALE_BLOCK, liveRatio);
+        if (!userRules.enabled) return _skip(instruction, SkipReason.DISABLED, liveRatio);
+        if (liveRatio >= userRules.upperRatio) return _skip(instruction, SkipReason.UPPER_BAND, liveRatio);
+        if (liveRatio >= userRules.lowerRatio || instruction.action != Action.REPAY) {
+            return _skip(instruction, SkipReason.SAFE_RANGE, liveRatio);
         }
-        if (debtBase == 0) return _skip(instruction, SkipReason.NO_DEBT, liveHF);
+        if (debt == 0) return _skip(instruction, SkipReason.NO_DEBT, liveRatio);
         (uint256 amount,) = previewRepay(instruction.borrower);
-        if (amount == 0) return _skip(instruction, SkipReason.NO_RESERVE, liveHF);
+        if (amount == 0) return _skip(instruction, SkipReason.NO_RESERVE, liveRatio);
         if (instruction.suggestedRepayAmount != 0 && amount > instruction.suggestedRepayAmount) {
             amount = instruction.suggestedRepayAmount;
         }
 
         reserves[instruction.borrower] -= amount;
-        uint256 repaid = pool.repay(address(usdc), amount, 2, instruction.borrower);
-        if (repaid < amount) reserves[instruction.borrower] += amount - repaid;
-        emit RepaymentExecuted(instruction.evaluationId, instruction.borrower, repaid, liveHF);
+        uint256 debtBefore = debt;
+        comet.supplyTo(instruction.borrower, address(usdc), amount);
+        uint256 debtAfter = comet.borrowBalanceOf(instruction.borrower);
+        uint256 repaid = debtBefore - debtAfter;
+        emit RepaymentExecuted(instruction.evaluationId, instruction.borrower, repaid, liveRatio);
     }
 
-    function _skip(Instruction memory instruction, SkipReason reason, uint256 liveHF) private {
-        emit InstructionSkipped(instruction.evaluationId, instruction.borrower, reason, liveHF);
+    function _skip(Instruction memory instruction, SkipReason reason, uint256 liveRatio) private {
+        emit InstructionSkipped(instruction.evaluationId, instruction.borrower, reason, liveRatio);
     }
 
     function _setWorkflowAuthorization(address forwarder_, address workflowOwner_, bytes32 workflowId_) private {
@@ -204,9 +216,5 @@ contract TrovePilotReceiver {
         expectedWorkflowOwner = workflowOwner_;
         expectedWorkflowId = workflowId_;
         emit WorkflowAuthorizationUpdated(forwarder_, workflowOwner_, workflowId_);
-    }
-
-    function _ceilDiv(uint256 a, uint256 b) private pure returns (uint256) {
-        return a == 0 ? 0 : (a - 1) / b + 1;
     }
 }

@@ -6,7 +6,7 @@ import { AppShell } from '@/components/AppShell'
 
 export const metadata = {
   title: 'TrovePilot CRE',
-  description: 'Keyless Aave V3 position monitoring powered by Chainlink CRE',
+  description: 'Keyless Compound III position monitoring powered by Chainlink CRE',
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
