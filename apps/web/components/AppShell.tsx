@@ -6,6 +6,7 @@ import { TrovePilotProvider, useTrovePilot } from '@/components/TrovePilotProvid
 
 const navItems = [
   { href: '/', label: 'Dashboard' },
+  { href: '/compound-setup', label: 'Compound setup' },
   { href: '/rules', label: 'Automation rules' },
   { href: '/reserve', label: 'USDC reserve' },
   { href: '/activity', label: 'CRE activity' },

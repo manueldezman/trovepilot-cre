@@ -1,7 +1,5 @@
 import { ActivityPanel } from '@/components/ActivityPanel'
 import { PositionMetrics } from '@/components/PositionMetrics'
-import { ReservePanel } from '@/components/ReservePanel'
-import { RulesPanel } from '@/components/RulesPanel'
 
 export default function Page() {
   return (
@@ -15,10 +13,6 @@ export default function Page() {
         <div className="heartbeat"><span className="pulse" /><div><b>Next heartbeat</b><strong>04:27</strong><small>Oracle events run immediately</small></div></div>
       </section>
       <PositionMetrics />
-      <div className="columns">
-        <RulesPanel />
-        <ReservePanel />
-      </div>
       <ActivityPanel />
     </>
   )
