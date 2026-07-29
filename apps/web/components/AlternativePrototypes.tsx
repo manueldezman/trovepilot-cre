@@ -46,8 +46,20 @@ export function AtlasPrototype() {
       </section>
 
       <section className={styles.atlasSignals} id="signals">
-        <h2>SIGNAL TRAIL</h2>
-        <div><time>10:55</time><i /><p>5 USDC REPAID<br /><small>TARGET RESTORED</small></p><time>11:30</time><i /><p>ORACLE UPDATE<br /><small>$64,454 FINALIZED</small></p><time>11:35</time><i /><p>HEARTBEAT<br /><small>NO ACTION</small></p></div>
+        <h2>SIGNAL TERMINAL</h2>
+        <div className={styles.terminal}>
+          <div className={styles.terminalBar}>
+            <span><i /><i /><i /></span>
+            <b>cre://trovepilot/compound-monitor --follow</b>
+            <em>CONNECTED</em>
+          </div>
+          <div className={styles.terminalBody}>
+            <p><time>10:55:12</time><b>REPORT_EXECUTED</b><span>repay=5.000000_USDC</span><span>target_ratio=1.600</span><em>tx=0x91ac…f02e</em></p>
+            <p><time>11:30:04</time><b>ORACLE_EVENT</b><span>wbtc_usd=64454.20</span><span>block=11374891</span><em>FINALIZED</em></p>
+            <p><time>11:35:29</time><b>HEARTBEAT</b><span>ratio=2.5069</span><span>decision=NO_ACTION_UPPER_BAND</span><em>OK</em></p>
+            <p className={styles.prompt}><time>$</time><span>awaiting next finalized trigger</span><i /></p>
+          </div>
+        </div>
       </section>
       <Link className={styles.back} href="/designs">← ALL CONCEPTS</Link>
     </main>
