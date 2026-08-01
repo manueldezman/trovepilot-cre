@@ -70,16 +70,20 @@ npm install
 cre workflow simulate ./workflow.yaml --target staging-settings
 ```
 
-The exact CRE CLI deploy command depends on the authenticated CLI release. Use `workflow.yaml` and
-`project.yaml`, authenticate the workflow-owner wallet, deploy/register `trovepilot-rebalance`, then update
-the receiver's expected workflow owner and ID. Switch `dryRun` to `false` only after simulation succeeds.
+For the Sepolia demonstration, registration is not required. Keep `dryRun: true` for calculation-only
+checks. After the receiver is deployed and authorized, switch `dryRun` to `false` and use
+`cre workflow simulate . --broadcast` for a controlled chain write. This runs locally and does not provide
+continuous hosted heartbeat or event monitoring.
+
+Use `scripts/capture-cre-evidence.sh` to record the Git commit, CRE version, binary/config/workflow hashes,
+full simulation transcript, transaction hash, and SHA-256 checksums. See
+[`docs/CRE_DEMO_EVIDENCE.md`](docs/CRE_DEMO_EVIDENCE.md) for the public verification record.
 
 ## Contract deployment
 
 `DEPLOYER_PRIVATE_KEY` is a one-time deployment credential. It is not read by the workflow or frontend.
-Load it into the shell without printing it, then broadcast the deployment script or call `Deploy.deploy`
-using Foundry. The receiver constructor requires non-zero expected workflow owner and workflow ID, so CRE
-identity must be known before final deployment.
+Load it into the shell without printing it, compute the workflow ID using `cre workflow hash`, then run the
+Foundry deployment script. The receiver constructor requires the broadcast-simulation owner and workflow ID.
 
 After confirmation:
 

@@ -5,8 +5,21 @@ import {IERC20, IComet} from "./interfaces.sol";
 
 /// @notice CRE-controlled Compound III repayment reserve. Borrowers retain ownership of their positions.
 contract TrovePilotReceiver {
-    enum Action { NO_ACTION, REPAY }
-    enum SkipReason { NONE, DUPLICATE, EXPIRED, STALE_BLOCK, DISABLED, SAFE_RANGE, UPPER_BAND, NO_RESERVE, NO_DEBT }
+    enum Action {
+        NO_ACTION,
+        REPAY
+    }
+    enum SkipReason {
+        NONE,
+        DUPLICATE,
+        EXPIRED,
+        STALE_BLOCK,
+        DISABLED,
+        SAFE_RANGE,
+        UPPER_BAND,
+        NO_RESERVE,
+        NO_DEBT
+    }
 
     struct Rules {
         uint128 lowerRatio;
@@ -49,12 +62,18 @@ contract TrovePilotReceiver {
     error TransferFailed();
     error ReentrantCall();
 
-    event RulesUpdated(address indexed borrower, uint256 lowerRatio, uint256 targetRatio, uint256 upperRatio, bool enabled);
+    event RulesUpdated(
+        address indexed borrower, uint256 lowerRatio, uint256 targetRatio, uint256 upperRatio, bool enabled
+    );
     event ReserveDeposited(address indexed borrower, uint256 amount);
     event ReserveWithdrawn(address indexed borrower, uint256 amount);
     event WorkflowAuthorizationUpdated(address indexed forwarder, address indexed workflowOwner, bytes32 workflowId);
-    event InstructionAccepted(bytes32 indexed evaluationId, address indexed borrower, Action action, uint256 observedRatio);
-    event InstructionSkipped(bytes32 indexed evaluationId, address indexed borrower, SkipReason reason, uint256 liveRatio);
+    event InstructionAccepted(
+        bytes32 indexed evaluationId, address indexed borrower, Action action, uint256 observedRatio
+    );
+    event InstructionSkipped(
+        bytes32 indexed evaluationId, address indexed borrower, SkipReason reason, uint256 liveRatio
+    );
     event RepaymentExecuted(bytes32 indexed evaluationId, address indexed borrower, uint256 amount, uint256 liveRatio);
 
     modifier onlyOwner() {
@@ -77,10 +96,9 @@ contract TrovePilotReceiver {
         address workflowOwner_,
         bytes32 workflowId_
     ) {
-        if (
-            comet_ == address(0) || collateralAsset_ == address(0) || usdc_ == address(0)
-                || forwarder_ == address(0)
-        ) revert InvalidAddress();
+        if (comet_ == address(0) || collateralAsset_ == address(0) || usdc_ == address(0) || forwarder_ == address(0)) {
+            revert InvalidAddress();
+        }
         comet = IComet(comet_);
         collateralAsset = collateralAsset_;
         usdc = IERC20(usdc_);
@@ -111,7 +129,10 @@ contract TrovePilotReceiver {
         emit ReserveWithdrawn(msg.sender, amount);
     }
 
-    function setWorkflowAuthorization(address forwarder_, address workflowOwner_, bytes32 workflowId_) external onlyOwner {
+    function setWorkflowAuthorization(address forwarder_, address workflowOwner_, bytes32 workflowId_)
+        external
+        onlyOwner
+    {
         _setWorkflowAuthorization(forwarder_, workflowOwner_, workflowId_);
     }
 
@@ -139,7 +160,9 @@ contract TrovePilotReceiver {
     }
 
     function currentRatio(address borrower)
-        public view returns (uint256 ratio, uint256 adjustedCollateralValue, uint256 debtValue)
+        public
+        view
+        returns (uint256 ratio, uint256 adjustedCollateralValue, uint256 debtValue)
     {
         IComet.AssetInfo memory asset = comet.getAssetInfoByAddress(collateralAsset);
         uint256 collateral = comet.collateralBalanceOf(borrower, collateralAsset);
@@ -179,7 +202,9 @@ contract TrovePilotReceiver {
         Rules memory userRules = rules[instruction.borrower];
         (uint256 liveRatio,,) = currentRatio(instruction.borrower);
         uint256 debt = comet.borrowBalanceOf(instruction.borrower);
-        emit InstructionAccepted(instruction.evaluationId, instruction.borrower, instruction.action, instruction.observedRatio);
+        emit InstructionAccepted(
+            instruction.evaluationId, instruction.borrower, instruction.action, instruction.observedRatio
+        );
 
         if (instruction.validUntil < block.timestamp) return _skip(instruction, SkipReason.EXPIRED, liveRatio);
         if (
@@ -211,7 +236,9 @@ contract TrovePilotReceiver {
     }
 
     function _setWorkflowAuthorization(address forwarder_, address workflowOwner_, bytes32 workflowId_) private {
-        if (forwarder_ == address(0) || workflowOwner_ == address(0) || workflowId_ == bytes32(0)) revert InvalidAddress();
+        if (forwarder_ == address(0) || workflowOwner_ == address(0) || workflowId_ == bytes32(0)) {
+            revert InvalidAddress();
+        }
         forwarder = forwarder_;
         expectedWorkflowOwner = workflowOwner_;
         expectedWorkflowId = workflowId_;

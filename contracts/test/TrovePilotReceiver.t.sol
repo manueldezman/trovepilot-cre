@@ -14,16 +14,22 @@ interface Vm {
 contract MockToken is IERC20 {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
-    function mint(address to, uint256 amount) external { balanceOf[to] += amount; }
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+
     function approve(address spender, uint256 amount) external returns (bool) {
         allowance[msg.sender][spender] = amount;
         return true;
     }
+
     function transfer(address to, uint256 amount) external returns (bool) {
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
         return true;
     }
+
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
         if (allowance[from][msg.sender] != type(uint256).max) allowance[from][msg.sender] -= amount;
         balanceOf[from] -= amount;
@@ -49,21 +55,36 @@ contract MockComet is IComet {
         collateral = collateral_;
     }
 
-    function baseToken() external view returns (address) { return address(token); }
-    function baseTokenPriceFeed() external pure returns (address) { return BASE_FEED; }
-    function baseScale() external pure returns (uint256) { return 1e6; }
+    function baseToken() external view returns (address) {
+        return address(token);
+    }
+
+    function baseTokenPriceFeed() external pure returns (address) {
+        return BASE_FEED;
+    }
+
+    function baseScale() external pure returns (uint256) {
+        return 1e6;
+    }
+
     function getPrice(address feed) external view returns (uint256) {
         return feed == COLLATERAL_FEED ? collateralPrice : basePrice;
     }
+
     function getAssetInfoByAddress(address asset) external view returns (AssetInfo memory) {
         require(asset == collateral);
-        return AssetInfo(0, collateral, COLLATERAL_FEED, 1e8, 0.70e18, 0.75e18, 0.93e18, 35_000e8);
+        return AssetInfo(0, collateral, COLLATERAL_FEED, 1e8, 0.7e18, 0.75e18, 0.93e18, 35_000e8);
     }
+
     function collateralBalanceOf(address account, address asset) external view returns (uint128) {
         require(asset == collateral);
         return collateralBalances[account];
     }
-    function borrowBalanceOf(address account) external view returns (uint256) { return debts[account]; }
+
+    function borrowBalanceOf(address account) external view returns (uint256) {
+        return debts[account];
+    }
+
     function supplyTo(address dst, address asset, uint256 amount) external {
         require(asset == address(token));
         token.transferFrom(msg.sender, address(this), amount);
@@ -72,11 +93,15 @@ contract MockComet is IComet {
         lastRepay = repaid;
         lastBorrower = dst;
     }
+
     function setPosition(address account, uint128 collateralAmount, uint256 debt) external {
         collateralBalances[account] = collateralAmount;
         debts[account] = debt;
     }
-    function setCollateralPrice(uint256 price) external { collateralPrice = price; }
+
+    function setCollateralPrice(uint256 price) external {
+        collateralPrice = price;
+    }
 }
 
 contract TrovePilotReceiverTest {
@@ -93,15 +118,13 @@ contract TrovePilotReceiverTest {
     function setUp() public {
         usdc = new MockToken();
         comet = new MockComet(usdc, WBTC);
-        receiver = new TrovePilotReceiver(
-            address(comet), WBTC, address(usdc), FORWARDER, WORKFLOW_OWNER, WORKFLOW_ID
-        );
+        receiver = new TrovePilotReceiver(address(comet), WBTC, address(usdc), FORWARDER, WORKFLOW_OWNER, WORKFLOW_ID);
         comet.setPosition(BORROWER, 1e8, 450e6);
         usdc.mint(BORROWER, 500e6);
         vm.prank(BORROWER);
         usdc.approve(address(receiver), type(uint256).max);
         vm.prank(BORROWER);
-        receiver.setRules(uint128(1.58e18), uint128(1.60e18), uint128(1.62e18), true);
+        receiver.setRules(uint128(1.58e18), uint128(1.6e18), uint128(1.62e18), true);
         vm.prank(BORROWER);
         receiver.depositReserve(500e6);
     }
@@ -112,7 +135,7 @@ contract TrovePilotReceiverTest {
         require(comet.debts(BORROWER) == 437_500_000, "target debt not restored");
         require(receiver.reserves(BORROWER) == 487_500_000, "reserve not debited");
         (uint256 ratio,,) = receiver.currentRatio(BORROWER);
-        require(ratio == 1.60e18, "target ratio not restored");
+        require(ratio == 1.6e18, "target ratio not restored");
     }
 
     function testSuggestedAmountCapsRepayment() public {
@@ -163,9 +186,11 @@ contract TrovePilotReceiverTest {
         vm.prank(FORWARDER);
         receiver.onReport(
             _metadata(),
-            abi.encode(TrovePilotReceiver.Instruction(
-                BORROWER, TrovePilotReceiver.Action.REPAY, 1.5e18, 1, block.timestamp + 60, bytes32("stale"), 500e6
-            ))
+            abi.encode(
+                TrovePilotReceiver.Instruction(
+                    BORROWER, TrovePilotReceiver.Action.REPAY, 1.5e18, 1, block.timestamp + 60, bytes32("stale"), 500e6
+                )
+            )
         );
         require(comet.lastRepay() == 0, "stale report executed");
     }
@@ -183,7 +208,9 @@ contract TrovePilotReceiverTest {
         );
 
         vm.expectRevert();
-        receiver.onReport(_metadata(), _encoded(bytes32("bad"), TrovePilotReceiver.Action.REPAY, block.timestamp + 60, 1e6));
+        receiver.onReport(
+            _metadata(), _encoded(bytes32("bad"), TrovePilotReceiver.Action.REPAY, block.timestamp + 60, 1e6)
+        );
     }
 
     function testOnlyBorrowerCanWithdraw() public {
@@ -204,7 +231,9 @@ contract TrovePilotReceiverTest {
     }
 
     function _encoded(bytes32 id, TrovePilotReceiver.Action action, uint256 expiry, uint256 amount)
-        private view returns (bytes memory)
+        private
+        view
+        returns (bytes memory)
     {
         return abi.encode(TrovePilotReceiver.Instruction(BORROWER, action, 1.5e18, block.number, expiry, id, amount));
     }
