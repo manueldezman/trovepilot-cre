@@ -16,7 +16,7 @@ contract Deploy {
     address constant COMET = 0xAec1F48e02Cfb822Be958B68C7957156EB3F0b6e;
     address constant WBTC = 0xa035b9e130F2B1AedC733eEFb1C67Ba4c503491F;
     address constant USDC = 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238;
-    address constant SEPOLIA_FORWARDER = 0xF8344CFd5c43616a4366C34E3EEE75af79a74482;
+    address constant SEPOLIA_FORWARDER = 0x15fC6ae953E024d975e77382eEeC56A9101f9F88;
 
     function run() external returns (TrovePilotReceiver receiver) {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");

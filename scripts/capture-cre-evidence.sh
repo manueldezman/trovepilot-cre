@@ -26,7 +26,7 @@ fi
 
 mkdir -p "$run_dir"
 git -C "$repo_root" rev-parse HEAD > "$run_dir/git-commit.txt"
-git -C "$repo_root" status --short > "$run_dir/git-status.txt"
+git -C "$repo_root" status --short -- . ':(exclude)evidence/runs' > "$run_dir/git-status.txt"
 "$cre_bin" version > "$run_dir/cre-version.txt"
 
 owner="$(sed -n 's/^EXPECTED_WORKFLOW_OWNER=//p' "$env_file" | tail -n 1 | tr -d '\r\"')"
