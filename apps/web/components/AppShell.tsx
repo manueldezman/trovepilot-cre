@@ -1,53 +1,30 @@
-'use client'
-
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { TrovePilotProvider, useTrovePilot } from '@/components/TrovePilotProvider'
+import type { ReactNode } from 'react'
+import { caseStudy } from '@/lib/caseStudy'
 
 const navItems = [
-  { href: '/', label: 'Field' },
-  { href: '/compound-setup', label: 'Position' },
-  { href: '/rules', label: 'Policy' },
-  { href: '/reserve', label: 'Reserve' },
-  { href: '/activity', label: 'Signals' },
-  { href: '/simulation', label: 'Simulation' },
+  { href: '#aim', label: 'Aim' },
+  { href: '#architecture', label: 'Architecture' },
+  { href: '#thresholds', label: 'Thresholds' },
+  { href: '#execution', label: 'Execution' },
+  { href: '#proof', label: 'References' },
 ]
 
-export function AppShell({ children }: { children: React.ReactNode }) {
-  return (
-    <TrovePilotProvider>
-      <ShellFrame>{children}</ShellFrame>
-    </TrovePilotProvider>
-  )
-}
-
-function ShellFrame({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const { account, connect } = useTrovePilot()
-
-  if (pathname.startsWith('/designs')) return <>{children}</>
-
-  const current = navItems.find((item) => item.href === pathname)?.label ?? 'Collateral field'
-
+export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="atlasApp">
-      <header className="atlasHeader">
-        <Link className="atlasBrand" href="/"><b>TP</b><span>TROVEPILOT<small>COLLATERAL FIELD / CRE</small></span></Link>
-        <nav className="atlasNav">
+      <header className="storyHeader">
+        <Link className="atlasBrand" href="/"><b>TP</b><span>TROVEPILOT<small>ENGINEERING TEST REPORT</small></span></Link>
+        <nav className="storyNav" aria-label="Case study sections">
           {navItems.map((item) => (
-            <Link className={pathname === item.href ? 'active' : ''} href={item.href} key={item.href}>
-              {item.label}
-            </Link>
+            <a href={item.href} key={item.href}>{item.label}</a>
           ))}
         </nav>
-        <button className="atlasConnect" onClick={connect}>
-          {account ? `${account.slice(0, 6)}…${account.slice(-4)}` : 'CONNECT ↗'}
-        </button>
+        <a className="storyRepo" href={caseStudy.links.creRepository} target="_blank" rel="noreferrer">SOURCE ↗</a>
       </header>
-      <div className="atlasContext"><span>COMPOUND III · ETHEREUM SEPOLIA</span><b>{current.toUpperCase()}</b><span><i /> CRE MONITOR</span></div>
-      <main className="atlasMain">
-        {children}
-      </main>
+      <div className="atlasContext"><span>COMPOUND III · ETHEREUM SEPOLIA</span><b>CRE TEST REPORT</b><span><i /> SEPOLIA TX CONFIRMED</span></div>
+      <main className="storyMain">{children}</main>
+      <footer className="storyFooter"><span>TROVEPILOT CRE · 2026</span><span>LOCAL CRE SIMULATION / SEPOLIA BROADCAST</span></footer>
     </div>
   )
 }

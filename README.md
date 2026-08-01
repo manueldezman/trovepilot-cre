@@ -5,6 +5,8 @@ borrower's WBTC/USDC safety ratio when BTC/USD updates and every five minutes. B
 band it sends a report to an onchain receiver, which independently recalculates and caps a USDC repayment.
 
 There is no recurring automation wallet, VPS listener, browser private key, or custom transaction signer.
+This repository is a redesign of the original
+[`trovepilot`](https://github.com/manueldezman/trovepilot) Mezo/VPS implementation.
 
 ## How it works
 
@@ -21,7 +23,7 @@ USDC just to lower a healthy position's ratio.
 ## Repository
 
 ```text
-apps/web/                         Next.js dashboard
+apps/web/                         Read-only Next.js engineering report
 contracts/                        Foundry receiver, mocks, tests, deploy script
 workflows/trovepilot-rebalance/   TypeScript CRE workflow and pure policy
 docs/                             Architecture and deployment evidence
@@ -38,14 +40,13 @@ npm run test:contracts
 npm run build
 ```
 
-Run the frontend with `npm run dev --workspace apps/web`. Configure
-`NEXT_PUBLIC_RECEIVER_ADDRESS` only after deployment. Browser variables are public; never place a private
-key in any `NEXT_PUBLIC_*` variable.
+Run the report locally with `npm run dev --workspace apps/web`. It is a static, read-only presentation of
+the recorded demonstration and requires no wallet connection, RPC URL, or browser environment variables.
 
 ## Testnet position and reserve
 
 1. Fund the user wallet with Sepolia ETH.
-2. Use `/compound-setup` to request WBTC and USDC from the Compound Sepolia faucet.
+2. Request WBTC and USDC from the Compound Sepolia faucet contract.
 3. Supply WBTC and borrow USDC through the Compound cUSDCv3 market.
 4. Deploy the receiver and configure the borrower rules.
 5. Approve the receiver for USDC, then call `depositReserve`.
@@ -88,7 +89,7 @@ Foundry deployment script. The receiver constructor requires the broadcast-simul
 
 After confirmation:
 
-1. Put the receiver address in the CRE config and web environment.
+1. Put the receiver address in the CRE config.
 2. Verify receiver source and constructor arguments.
 3. Run an authorized safe-range report.
 4. Prepare a controlled low-HF test position and execute one capped repayment.
@@ -110,9 +111,9 @@ If event delivery is missed, the five-minute heartbeat provides bounded fallback
 For a report that reaches the receiver but does not repay, inspect `InstructionSkipped`. Common reasons are
 duplicate evaluation, expiry, disabled rules, safe/upper ratio, no reserve, or no debt.
 
-After deployment, use the `/activity` page for the latest processed evaluation ID and a direct receiver
-event link. CRE structured logs show every heartbeat/event decision and report transaction hash; Etherscan
-receiver events independently show accepted reports, skip reasons, and completed repayments.
+After deployment, CRE structured logs show every heartbeat/event decision and report transaction hash.
+Etherscan receiver events independently show accepted reports, skip reasons, and completed repayments. The
+read-only report links the recorded transcript, checksums, contract, and transaction evidence.
 
 ## Security limitations
 
@@ -124,11 +125,11 @@ receiver events independently show accepted reports, skip reasons, and completed
   end-to-end testnet demonstration, not a production mainnet deployment.
 - Reverted EVM transactions cannot retain rejection events. Unauthorized and malformed calls therefore
   revert; authenticated, well-formed skips emit durable reason events.
-- Frontend reads and user-signed writes require `NEXT_PUBLIC_RECEIVER_ADDRESS`; without it the dashboard
-  remains safely read-only and explains that deployment configuration is missing.
+- The frontend is a static engineering report. It contains no transaction controls, private keys, runtime
+  RPC dependency, or wallet connection.
 
 ## What was reused
 
-The original dark-crimson TrovePilot visual language, three-threshold safety band, target-restoration
-repayment intent, and reserve model were retained. Mezo ICR contracts, MUSD mint/repay calls, BTC simulation
-routes, VPS listener, five-second block polling, and server-side signer were removed from the production path.
+The original TrovePilot monitoring objective, three-threshold safety band, target-restoration repayment
+intent, and reserve model were retained. Mezo ICR contracts, MUSD mint/repay calls, BTC simulation routes,
+VPS listener, five-second block polling, and server-side signer were removed from the CRE implementation.

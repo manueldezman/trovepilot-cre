@@ -5,8 +5,8 @@ import './globals.css'
 import { AppShell } from '@/components/AppShell'
 
 export const metadata = {
-  title: 'TrovePilot CRE',
-  description: 'Keyless Compound III position monitoring powered by Chainlink CRE',
+  title: 'TrovePilot CRE — Engineering Test Report',
+  description: 'Compound III collateral repayment test using Chainlink CRE on Ethereum Sepolia.',
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
