@@ -1,0 +1,4 @@
+✓ Workflow compiled
+  Binary hash:   5254a6f166a04e7d0cc2186e59f1b331d500882139543862fbad115bd727b3b3
+  Config hash:   061ffdb7e5c630db4f13ee958b2f9a0483333cc1484a0610e24c7a9b5635824e
+  Workflow hash: 004154dddbcf8076fcb6a584cd7974933ddd25eecdc6aa13a35f7d20460f7903
