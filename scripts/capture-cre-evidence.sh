@@ -14,6 +14,7 @@ if [[ ! -f "$env_file" ]]; then
   echo "Missing environment file: $env_file" >&2
   exit 1
 fi
+env_file="$(cd "$(dirname "$env_file")" && pwd)/$(basename "$env_file")"
 if [[ "$mode" != "dry-run" && "$mode" != "broadcast" ]]; then
   echo "Mode must be dry-run or broadcast" >&2
   exit 1
