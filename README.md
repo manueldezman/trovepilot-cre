@@ -60,6 +60,7 @@ Edit `workflows/trovepilot-rebalance/config.staging.json`:
 - Set `receiverAddress` to the deployed receiver.
 - Add borrower addresses.
 - Keep `schedule` as `0 */5 * * * *`.
+- Set `reportTtlSeconds` above the testnet's finalized-state lag; the Sepolia demonstration uses `1800`.
 - Start with `dryRun: true`. Dry-run evaluates and logs decisions but submits no report.
 
 The workflow has no secret file. The RPC URL is supplied through `CRE_ETHEREUM_RPC_URL`.

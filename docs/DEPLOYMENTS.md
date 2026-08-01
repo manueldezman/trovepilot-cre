@@ -4,12 +4,13 @@
 | --- | --- |
 | TrovePilotReceiver | [`0x7C547dE17b7e2335cFDA59cCa83AB45Dff790583`](https://sepolia.etherscan.io/address/0x7C547dE17b7e2335cFDA59cCa83AB45Dff790583) |
 | Workflow owner | `0x6E5858D78b07f6D839d7D776d872Fc354b356AF5` |
-| Workflow ID | `0x003adb9b51d50f00d86b770fb38b0cb75b1660698a5f069eacb382fab3df2b8a` |
+| Workflow ID | `0x004154dddbcf8076fcb6a584cd7974933ddd25eecdc6aa13a35f7d20460f7903` |
 | Deployment transaction | [`0x58f9e52b27396466ca832ffa58b2f5e5690300974d203d24379b408d42fe2acb`](https://sepolia.etherscan.io/tx/0x58f9e52b27396466ca832ffa58b2f5e5690300974d203d24379b408d42fe2acb) |
 | Workflow authorization transaction | [`0xb8714bf049b0378b50f4ab928857075a1765a6b387e40b15a3c51de296facd53`](https://sepolia.etherscan.io/tx/0xb8714bf049b0378b50f4ab928857075a1765a6b387e40b15a3c51de296facd53) |
 | Broadcast-mode authorization | [`0x72553290c128ee77ea7b4239d31a23f49c7c2492c55cc874e725a0136bdab30f`](https://sepolia.etherscan.io/tx/0x72553290c128ee77ea7b4239d31a23f49c7c2492c55cc874e725a0136bdab30f) |
 | CRE CLI Forwarder correction | [`0x30489f5cc04b32020d68e72c0311c7a54311d6ac828dab932129a5ce45f0355f`](https://sepolia.etherscan.io/tx/0x30489f5cc04b32020d68e72c0311c7a54311d6ac828dab932129a5ce45f0355f) |
 | CRE simulator metadata authorization | [`0x44f048533288f02c117a4fcfabef71ae8ac3f4c62caca3952b893d2bcb00875c`](https://sepolia.etherscan.io/tx/0x44f048533288f02c117a4fcfabef71ae8ac3f4c62caca3952b893d2bcb00875c) |
+| Expiry-guard demonstration | [`0xbed79bfe7ee985cd96527f44968aac0a65308a07796a0a079aacb11d7b50126a`](https://sepolia.etherscan.io/tx/0xbed79bfe7ee985cd96527f44968aac0a65308a07796a0a079aacb11d7b50126a) — accepted then safely skipped |
 | Demonstration repayment | Pending borrower position |
 
 This is a local CRE simulation with Sepolia broadcast; it is not a registered or DON-hosted workflow.
@@ -25,6 +26,11 @@ proved that local simulation reports use fixed mock metadata: workflow ID `0x111
 `0xaaaa...aaaa`. It also left reserve, evaluation ID, and Compound debt unchanged. The receiver temporarily
 authorizes those simulator values only for the broadcast demonstration; real workflow authorization is
 restored afterward.
+
+The third broadcast reached the receiver and emitted `InstructionAccepted`, followed by
+`InstructionSkipped(EXPIRED)`. Sepolia's finalized timestamp lag exceeded the original 300-second report
+TTL. The demonstration TTL was increased to 1800 seconds; the receiver's independent 256-block age limit
+continues to reject stale reports.
 
 ## Verified dependencies
 
