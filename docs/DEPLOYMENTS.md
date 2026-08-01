@@ -9,6 +9,7 @@
 | Workflow authorization transaction | [`0xb8714bf049b0378b50f4ab928857075a1765a6b387e40b15a3c51de296facd53`](https://sepolia.etherscan.io/tx/0xb8714bf049b0378b50f4ab928857075a1765a6b387e40b15a3c51de296facd53) |
 | Broadcast-mode authorization | [`0x72553290c128ee77ea7b4239d31a23f49c7c2492c55cc874e725a0136bdab30f`](https://sepolia.etherscan.io/tx/0x72553290c128ee77ea7b4239d31a23f49c7c2492c55cc874e725a0136bdab30f) |
 | CRE CLI Forwarder correction | [`0x30489f5cc04b32020d68e72c0311c7a54311d6ac828dab932129a5ce45f0355f`](https://sepolia.etherscan.io/tx/0x30489f5cc04b32020d68e72c0311c7a54311d6ac828dab932129a5ce45f0355f) |
+| CRE simulator metadata authorization | [`0x44f048533288f02c117a4fcfabef71ae8ac3f4c62caca3952b893d2bcb00875c`](https://sepolia.etherscan.io/tx/0x44f048533288f02c117a4fcfabef71ae8ac3f4c62caca3952b893d2bcb00875c) |
 | Demonstration repayment | Pending borrower position |
 
 This is a local CRE simulation with Sepolia broadcast; it is not a registered or DON-hosted workflow.
@@ -18,6 +19,12 @@ The first broadcast, [`0x16291a5e6d31d64c34c8f04c80efe9d16cf7259f681aaf59c5fc2db
 proved that CRE CLI `1.27.0` routes simulation broadcasts through `0x15fC...9F88`. The receiver had been
 configured for a newer Forwarder address, so that transaction emitted only the Forwarder event and did not
 change the reserve, evaluation ID, or Compound debt. Authorization was corrected before retrying.
+
+The second broadcast, [`0xfeff32ae4ba96c797241fbb491758f23bf5b0c5fd115124dd09500eadc6ef97b`](https://sepolia.etherscan.io/tx/0xfeff32ae4ba96c797241fbb491758f23bf5b0c5fd115124dd09500eadc6ef97b),
+proved that local simulation reports use fixed mock metadata: workflow ID `0x1111...1111` and workflow owner
+`0xaaaa...aaaa`. It also left reserve, evaluation ID, and Compound debt unchanged. The receiver temporarily
+authorizes those simulator values only for the broadcast demonstration; real workflow authorization is
+restored afterward.
 
 ## Verified dependencies
 
